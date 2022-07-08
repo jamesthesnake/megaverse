@@ -67,9 +67,12 @@ class CMakeBuild(build_ext):
         cmake_args = [
             f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}',
             f'-DPYTHON_EXECUTABLE={sys.executable}',
-            f'-DCMAKE_CUDA_COMPILER={locate_cuda()}',
             # f'-DOpenCV_DIR =/home/alex/all/lib/opencv/build',  # TODO!!!
         ]
+
+        if sys.platform != "darwin":
+            # if not on mac, look for cuda/nvcc
+            cmake_args.append(f'-DCMAKE_CUDA_COMPILER={locate_cuda()}')
 
         # that's a hacky way to do it but the best idea I have at the moment
         bullet_root = os.environ.get('BULLET_ROOT', None)
@@ -94,7 +97,10 @@ class CMakeBuild(build_ext):
 
         print('Build temp directory is ', self.build_temp)
 
-        subprocess.check_call(['cmake', ext.sourcedir] + cmake_args, cwd=self.build_temp, env=env)
+        cmake_cmd = ['cmake', ext.sourcedir] + cmake_args
+        print(f'CMake command is: {" ".join(cmake_cmd)}')
+
+        subprocess.check_call(cmake_cmd, cwd=self.build_temp, env=env)
         subprocess.check_call(
             ['cmake', '--build', '.', '--target', 'megaverse'] + build_args, cwd=self.build_temp,
         )
@@ -105,7 +111,7 @@ class CMakeBuild(build_ext):
 def main():
     setup(
         name='megaverse',
-        version='0.0.1',
+        version='0.0.2',
         author='Aleksei Petrenko',
         author_email='apetrenko1991@gmail.com',
         description='Fast immersive environment',
@@ -116,6 +122,9 @@ def main():
         ext_modules=[CMakeExtension('megaverse.extension.megaverse', 'src')],
         cmdclass=dict(build_ext=CMakeBuild),
         zip_safe=False,
+        install_requires=[
+            'gym>=0.17.1',
+        ],
     )
 
     return 0

@@ -7,44 +7,18 @@
 
 #include <viewer/viewer.hpp>
 
+#include "viewer_args.hpp"
+
 using namespace Magnum;
 using namespace Magnum::Math::Literals;
 
 using namespace Megaverse;
 
-// TODO: CLI parameters
-#if defined(CORRADE_TARGET_APPLE)
-constexpr bool useVulkanRenderer = false;
-
-static_assert(!useVulkanRenderer, "Vulkan not supported on MacOS");
-#else
-constexpr bool useVulkanRenderer = true;
-#endif
-
-// "main" envs
-//const auto scenarioName = "ObstaclesHard";  // *
-const auto scenarioName = "ObstaclesEasy";  // *
-//const auto scenarioName = "Collect";    // *
-//const auto scenarioName = "Sokoban";  // *
-//const auto scenarioName = "TowerBuilding";
-//const auto scenarioName = "HexMemory";  // *
-//const auto scenarioName = "HexExplore";  // *
-//const auto scenarioName = "Rearrange";  // *
-
-// test and experimental envs
-//const auto scenarioName = "Test";
-//const auto scenarioName = "Empty";
-//const auto scenarioName = "BoxAGone";
-//const auto scenarioName = "Football";
-//const auto scenarioName = "ObstaclesWalls";
-//const auto scenarioName = "ObstaclesSteps";
-//const auto scenarioName = "ObstaclesLava";
-
 
 class ViewerApp: public Viewer
 {
 public:
-    explicit ViewerApp(Envs &envs, unsigned int minimalLoopPeriod, const Arguments& arguments);
+    explicit ViewerApp(Envs &envs, unsigned int minimalLoopPeriod, bool useVulkanRenderer, const Arguments& arguments);
 
 private:
     void drawEvent() override;
@@ -62,7 +36,7 @@ private:
     Timeline timeline;
 };
 
-ViewerApp::ViewerApp(Envs &envs, unsigned int minimalLoopPeriod, const Arguments& arguments)
+ViewerApp::ViewerApp(Envs &envs, unsigned int minimalLoopPeriod, bool useVulkanRenderer, const Arguments& arguments)
 : Viewer{envs, useVulkanRenderer, nullptr, arguments}
 {
     setMinimalLoopPeriod(minimalLoopPeriod);
@@ -156,7 +130,19 @@ int main(int argc, char** argv)
 {
     scenariosGlobalInit();
 
-    const int numAgents = 2;
+    auto parser = viewerStandardArgParse("viewer_app");
+    parser.add_description("viewer_app can run any scenario in an interactive mode");
+    parser.add_argument("--desired_fps")
+        .help("rendering framerate for human perception; RL agents percieve the world at 15 FPS to avoid frameskip, hence the default value.")
+        .default_value(15)
+        .scan<'i', int>();
+
+    parseArgs(parser, argc, argv);
+
+    const auto scenarioName = parser.get<std::string>("--scenario");
+    const auto numAgents = parser.get<int>("--num_agents");
+    const auto desiredFps = parser.get<int>("--desired_fps");
+    const bool useVulkanRenderer = !parser.get<bool>("--use_opengl");
 
     FloatParams params{{Str::useUIRewardIndicators, 1.0f}};
     auto env = std::make_unique<Env>(scenarioName, numAgents, params);
@@ -165,14 +151,12 @@ int main(int argc, char** argv)
 #endif
     env->reset();
 
-    const int desiredFps = 15;
     const unsigned int delayMs = 1000 / desiredFps;
-
-    env->setSimulationResolution(1.0f / desiredFps);
+    env->setSimulationResolution(1.0f / float(desiredFps));
 
     Envs envs;
     envs.emplace_back(std::move(env));
 
-    ViewerApp app(envs, delayMs, {argc, argv});
+    ViewerApp app(envs, delayMs, useVulkanRenderer, {argc, argv});
     return app.exec();
 }
